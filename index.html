@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>廣和 マイページ</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --bg:#f4f2ee; --card:#ffffff; --ink:#1f2328; --sub:#6b6f76; --line:#e6e2da;
+    --accent:#e8710a; --accent-weak:#fdf0e3; --ok:#1a7f4b; --ok-weak:#e4f4ea; --warn:#b54708; --warn-weak:#fdf1e7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  header{background:var(--ink);color:#fff;padding:20px 16px 56px}
+  header .co{font-size:12px;opacity:.7;letter-spacing:.08em}
+  header h1{margin:4px 0 0;font-size:22px;font-weight:700}
+  header .type{display:inline-block;margin-top:8px;font-size:12px;padding:2px 10px;border-radius:99px;background:rgba(255,255,255,.14)}
+  main{max-width:560px;margin:-40px auto 0;padding:0 16px 40px}
+  .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .month{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .month b{font-size:18px}
+  .month button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-size:14px;color:var(--ink)}
+  .month button:disabled{opacity:.35}
+  .total{font-size:13px;color:var(--sub)}
+  .total .big{display:block;font-size:32px;font-weight:800;color:var(--ink);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+  .grid div{background:var(--bg);border-radius:10px;padding:10px;font-size:12px;color:var(--sub)}
+  .grid b{display:block;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .pay{display:flex;gap:8px;margin-top:8px}
+  .pay div{flex:1;border-radius:10px;padding:10px;font-size:12px}
+  .pay .p{background:var(--ok-weak);color:var(--ok)} .pay .u{background:var(--warn-weak);color:var(--warn)}
+  .pay b{display:block;font-size:16px;font-variant-numeric:tabular-nums}
+  h2{font-size:15px;margin:22px 4px 10px;color:var(--sub);font-weight:600}
+  .job{border-left:4px solid var(--accent)}
+  .job .d{font-weight:700;font-size:16px}
+  .job .row{margin-top:6px;font-size:14px}
+  .job .row span{color:var(--sub);display:inline-block;min-width:4.5em}
+  .job .memo{margin-top:8px;font-size:13px;background:var(--accent-weak);border-radius:8px;padding:8px 10px}
+  .day{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+  .day:first-child{border-top:0;padding-top:0}
+  .day .l{min-width:0}
+  .day .dt{font-weight:700}
+  .day .s{font-size:13px;color:var(--sub);overflow-wrap:anywhere}
+  .day .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .day .r .sm{font-size:12px;color:var(--sub)}
+  .badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;margin-top:4px}
+  .badge.p{background:var(--ok-weak);color:var(--ok)} .badge.u{background:var(--warn-weak);color:var(--warn)}
+  .empty{color:var(--sub);font-size:14px;text-align:center;padding:8px 0}
+  .msg{text-align:center;padding:48px 16px;color:var(--sub)}
+  .spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;margin:0 auto 12px;animation:r 1s linear infinite}
+  @keyframes r{to{transform:rotate(360deg)}}
+  footer{text-align:center;font-size:12px;color:var(--sub);margin-top:24px}
+</style>
+</head>
+<body>
+<header>
+  <div class="co">株式会社廣和</div>
+  <h1 id="name">マイページ</h1>
+  <span class="type" id="type" hidden></span>
+</header>
+<main id="app"><div class="card msg"><div class="spin"></div>読み込み中…</div></main>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+// ===== ここだけ書き換える =====
+const LIFF_ID = '2012584711-3ttxi78O';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwElemzEDhcciY3daPML12ogBU1Bw7J5xJgmvZMCxCTMCvxhlGJmctjORL4AQD35NjJ/exec';
+// ============================
+
+const app = document.getElementById('app');
+const yen = n => Number(n || 0).toLocaleString('ja-JP') + '円';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let cur = null;
+
+function showMsg(t){ app.innerHTML = `<div class="card msg">${esc(t)}</div>`; }
+
+async function load(month){
+  app.innerHTML = '<div class="card msg"><div class="spin"></div>読み込み中…</div>';
+  let data;
+  {
+    const idToken = liff.getIDToken();
+    const res = await fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'mypage', idToken, month }) });
+    data = await res.json();
+    if (data.error === 'expired') { liff.logout(); liff.login({ redirectUri: location.href }); return; }
+  }
+  if (data.error) return showMsg(data.error);
+  cur = data; render(data);
+}
+
+function shift(d){
+  let y = cur.year, m = cur.month + d;
+  if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
+  load(y + '-' + m);
+}
+
+function render(d){
+  document.getElementById('name').textContent = d.name + ' さん';
+  const ty = document.getElementById('type'); ty.textContent = d.payType || ''; ty.hidden = !d.payType;
+  const now = new Date(), isNow = d.year === now.getFullYear() && d.month === now.getMonth() + 1;
+  const t = d.totals;
+
+  const up = d.upcoming.length ? d.upcoming.map(j => `
+    <div class="card job">
+      <div class="d">${esc(j.date)}</div>
+      ${j.client ? `<div class="row"><span>取引先</span>${esc(j.client)}</div>` : ''}
+      <div class="row"><span>現場</span>${esc(j.site || '未定')}</div>
+      <div class="row"><span>集合</span>${esc(j.time || '未定')}</div>
+      ${j.planFare ? `<div class="row"><span>交通費</span>${esc(j.planFare)}円（予定・往復）</div>` : ''}
+      ${j.memo ? `<div class="memo">${esc(j.memo)}</div>` : ''}
+    </div>`).join('') : '<div class="card empty">決まっている現場はまだありません</div>';
+
+  const days = d.days.length ? d.days.map(x => `
+    <div class="day">
+      <div class="l"><div class="dt">${esc(x.day)}</div><div class="s">${esc([x.client, x.site].filter(Boolean).join('・'))}</div></div>
+      <div class="r">${yen(x.total)}<div class="sm">日当${yen(x.wage)}＋交通費${yen(x.fare)}</div>
+        <span class="badge ${x.paid ? 'p' : 'u'}">${x.paid ? '支払い済み' : '未払い'}</span></div>
+    </div>`).join('') : '<div class="empty">この月の稼働はまだありません</div>';
+
+  app.innerHTML = `
+    ${isNow ? `<h2 style="margin-top:0;color:#fff">これからの現場</h2>${up}` : ''}
+    <h2 ${isNow ? '' : 'style="margin-top:0;color:#fff"'}>稼働と支払い</h2>
+    <div class="card">
+      <div class="month"><button onclick="shift(-1)">‹ 前の月</button><b>${d.month}月</b><button onclick="shift(1)" ${isNow ? 'disabled' : ''}>次の月 ›</button></div>
+      <div class="total">${d.month}月の合計<span class="big">${yen(t.total)}</span></div>
+      <div class="grid"><div>稼働日数<b>${t.count}日</b></div><div>日当<b>${yen(t.wage)}</b></div><div>交通費<b>${yen(t.fare)}</b></div></div>
+      <div class="pay"><div class="p">支払い済み<b>${yen(t.paid)}</b></div><div class="u">未払い<b>${yen(t.unpaid)}</b></div></div>
+    </div>
+    <div class="card">${days}</div>
+    <footer>わからないことは公式LINEで聞いてください</footer>`;
+}
+
+(async () => {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) return liff.login({ redirectUri: location.href });
+    await load();
+  } catch (e) { showMsg('開けませんでした。公式LINEのメニューから開き直してください。'); console.error(e); }
+})();
+</script>
+</body>
+</html>
