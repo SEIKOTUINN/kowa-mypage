@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>来週の出勤予定｜廣和</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --bg:#f4f2ee; --card:#ffffff; --ink:#1f2328; --sub:#6b6f76; --line:#e6e2da;
+    --accent:#e8710a; --accent-weak:#fdf0e3; --ok:#1a7f4b; --ok-weak:#e4f4ea; --ng:#b42318; --ng-weak:#fdecea;
+    --night:#3b4a8c; --night-weak:#e8ebf7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  header{background:var(--ink);color:#fff;padding:20px 16px 52px}
+  header .co{font-size:12px;opacity:.7;letter-spacing:.08em}
+  header h1{margin:4px 0 0;font-size:21px;font-weight:700}
+  header .wk{margin-top:6px;font-size:14px;opacity:.85}
+  main{max-width:560px;margin:-36px auto 0;padding:0 16px 120px}
+  .card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .hint{font-size:13px;color:var(--sub);display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .hint button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:6px 12px;font-size:13px;color:var(--ink);white-space:nowrap}
+  .day{display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+  .day:first-child{border-top:0;padding-top:4px}
+  .dt b{display:block;font-size:20px;line-height:1.1;font-variant-numeric:tabular-nums}
+  .dt span{font-size:13px;color:var(--sub)}
+  .dt.sat span{color:#2f62b4} .dt.sun span{color:var(--ng)}
+  .ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;background:#fff;min-width:56px;height:44px;font-size:20px;font-weight:700;color:#b8bcc2}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on.o{background:var(--ok);color:#fff} .seg button.on.x{background:var(--ng);color:#fff}
+  .nt{height:44px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:0 12px;font-size:14px;color:var(--sub)}
+  .nt.on{background:var(--night);border-color:var(--night);color:#fff}
+  .nt:disabled{opacity:.35}
+  .job{grid-column:2;font-size:12px;color:var(--accent);background:var(--accent-weak);border-radius:8px;padding:4px 8px;justify-self:start}
+  textarea{width:100%;min-height:72px;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:15px;resize:vertical}
+  label{display:block;font-size:14px;font-weight:600;margin-bottom:6px}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:rgba(244,242,238,.96);padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+  .bar button{display:block;width:100%;max-width:528px;margin:0 auto;height:52px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:17px;font-weight:700}
+  .bar button:disabled{background:#d6d2ca}
+  .bar .left{text-align:center;font-size:12px;color:var(--sub);margin-bottom:6px}
+  .done{background:var(--ok-weak);color:var(--ok);border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px}
+  .msg{text-align:center;padding:48px 16px;color:var(--sub);white-space:pre-wrap;overflow-wrap:anywhere}
+  .spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;margin:0 auto 12px;animation:r 1s linear infinite}
+  @keyframes r{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="co">株式会社廣和</div>
+  <h1 id="ttl">来週の出勤予定</h1>
+  <div class="wk" id="wk"></div>
+</header>
+<main id="app"><div class="card msg"><div class="spin"></div>読み込み中…</div></main>
+<div class="bar" id="bar" hidden><div class="left" id="left"></div><button id="send">この内容で送る</button></div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+// ===== ここだけ書き換える =====
+const LIFF_ID = '2012584711-3ttxi78O';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwElemzEDhcciY3daPML12ogBU1Bw7J5xJgmvZMCxCTMCvxhlGJmctjORL4AQD35NjJ/exec';
+// ============================
+const DEMO = /[?&]demo=1/.test(location.search);
+const app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let st = null, done = null;
+
+function showMsg(t){ document.getElementById('bar').hidden = true; app.innerHTML = `<div class="card msg">${esc(t)}</div>`; }
+
+async function api(action, extra){
+  if (DEMO) return demo(action, extra);
+  const body = Object.assign({ action, idToken: liff.getIDToken(), accessToken: liff.getAccessToken() }, extra || {});
+  const res = await fetch(GAS_URL, { method:'POST', body: JSON.stringify(body) });
+  return res.json();
+}
+
+function render(){
+  document.getElementById('wk').textContent = st.label + '　' + st.name + ' さん';
+  const left = st.days.filter(d => d.ok === null).length;
+  const rows = st.days.map((d, i) => `
+    <div class="day">
+      <div class="dt ${i === 5 ? 'sat' : i === 6 ? 'sun' : ''}"><b>${esc(d.md)}</b><span>${esc(d.wd)}曜</span></div>
+      <div class="ctl">
+        <div class="seg">
+          <button class="o ${d.ok === true ? 'on' : ''}" data-i="${i}" data-v="1" aria-label="${esc(d.md)} 出られる">○</button>
+          <button class="x ${d.ok === false ? 'on' : ''}" data-i="${i}" data-v="0" aria-label="${esc(d.md)} 出られない">×</button>
+        </div>
+        <button class="nt ${d.ok && d.night ? 'on' : ''}" data-n="${i}" ${d.ok ? '' : 'disabled'}>夜勤OK</button>
+      </div>
+      ${d.job ? `<div class="job">決まっている現場：${esc(d.job)}</div>` : ''}
+    </div>`).join('');
+  app.innerHTML = `
+    ${done ? `<div class="done">送信しました（${esc(done)}）。変えたい時は、直してもう一度送ってください。</div>` : ''}
+    <div class="card hint">出られる日は○、出られない日は×<button id="all">全部○にする</button></div>
+    <div class="card">${rows}</div>
+    <div class="card"><label for="memo">ひとこと（任意）</label><textarea id="memo" placeholder="例）水曜は午後から／夜勤は週2回まで">${esc(st.memo)}</textarea></div>`;
+  const bar = document.getElementById('bar'); bar.hidden = false;
+  document.getElementById('left').textContent = left ? `あと${left}日 ○×を付けてください` : '全部の日に付けました';
+  document.getElementById('send').disabled = left > 0;
+}
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  st.memo = (document.getElementById('memo') || {}).value ?? st.memo;
+  if (b.id === 'all') st.days.forEach(d => { if (d.ok !== true) { d.ok = true; } });
+  else if (b.dataset.i) { const d = st.days[b.dataset.i]; d.ok = b.dataset.v === '1'; if (!d.ok) d.night = false; }
+  else if (b.dataset.n) { const d = st.days[b.dataset.n]; d.night = !d.night; }
+  render();
+});
+
+document.getElementById('send').addEventListener('click', async () => {
+  const btn = document.getElementById('send');
+  st.memo = document.getElementById('memo').value;
+  btn.disabled = true; btn.textContent = '送信中…';
+  try {
+    const r = await api('shift_save', { days: st.days.map(d => ({ ok: d.ok, night: !!d.night })), memo: st.memo });
+    if (r.error) throw new Error(r.error === 'expired' ? 'ログインの確認ができませんでした。開き直してください。[' + (r.detail || '') + ']' : r.error);
+    done = r.at; render(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) { alertBox(err.message); }
+  btn.textContent = 'この内容で送る';
+});
+
+function alertBox(t){ const d = document.createElement('div'); d.className = 'card msg'; d.style.color = 'var(--ng)'; d.style.padding = '14px'; d.textContent = t; app.prepend(d); window.scrollTo({ top: 0 }); }
+
+function demo(action){
+  if (action === 'shift_save') return Promise.resolve({ ok: true, at: '11/20 18:05' });
+  const base = new Date(2026, 10, 23), wd = ['月','火','水','木','金','土','日'];
+  return Promise.resolve({ name: '叶内洋一', label: '11/23(月)〜11/29(日)', memo: '', answered: false,
+    days: wd.map((w, i) => { const d = new Date(base.getTime() + i * 864e5); return { date: '', md: (d.getMonth() + 1) + '/' + d.getDate(), wd: w, ok: i === 0 ? true : null, night: false, job: i === 0 ? 'サンエレクト 多摩市落合' : '' }; }) });
+}
+
+(async () => {
+  try {
+    if (!DEMO) {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) return liff.login({ redirectUri: location.href });
+    }
+    const d = await api('shift_get');
+    if (d.error) return showMsg(d.error === 'expired' ? 'ログインの確認ができませんでした。この画面を深川さんに送ってください。\n[' + (d.detail || '') + ']' : d.error);
+    st = d; if (d.answered) done = d.at; render();
+  } catch (e) { showMsg('開けませんでした。公式LINEで「予定」と送って、出てきたリンクから開き直してください。'); console.error(e); }
+})();
+</script>
+</body>
+</html>
